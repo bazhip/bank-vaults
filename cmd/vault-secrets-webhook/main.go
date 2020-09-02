@@ -45,6 +45,7 @@ import (
 type VaultConfig struct {
 	Addr                        string
 	Role                        string
+	Email                       string
 	Path                        string
 	SkipVerify                  bool
 	TLSSecret                   string
@@ -89,6 +90,7 @@ func init() {
 	viper.SetDefault("vault_skip_verify", "false")
 	viper.SetDefault("vault_path", "kubernetes")
 	viper.SetDefault("vault_role", "")
+	viper.SetDefault("vault_email", "")
 	viper.SetDefault("vault_tls_secret", "")
 	viper.SetDefault("vault_client_timeout", "10s")
 	viper.SetDefault("vault_agent", "false")
@@ -125,6 +127,12 @@ func parseVaultConfig(obj metav1.Object) VaultConfig {
 		vaultConfig.Addr = val
 	} else {
 		vaultConfig.Addr = viper.GetString("vault_addr")
+	}
+
+	if val, ok := annotations["vault.security.banzaicloud.io/google-sa-email"]; ok {
+		vaultConfig.Email = val
+	} else {
+		vaultConfig.Email = viper.GetString("vault_email")
 	}
 
 	if val, ok := annotations["vault.security.banzaicloud.io/vault-role"]; ok {

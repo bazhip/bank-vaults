@@ -17,6 +17,7 @@ package vault
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -300,8 +301,7 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 					}
 					client.mu.Unlock()
 
-					// Projected SA tokens do expire, so we need to move the reading logic into the loop
-					jwt, err := ioutil.ReadFile(serviceAccountFile)
+					jwt, err := gceJwt()
 					if err != nil {
 						logger.Errorf("failed to read SA token %s: %v", serviceAccountFile, err.Error())
 						continue
@@ -365,6 +365,30 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 	}
 
 	return client, nil
+}
+
+func gceJwt() (string, error) {
+	req, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email", nil)
+	if err != nil {
+		// handle err
+	}
+	req.Header.Set("Metadata-Flavor", "Google")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// handle err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		jwt := string(bodyBytes)
+		return jwt, nil
+	}
+	return "", nil
 }
 
 func runRenewChecker(tokenRenewer *vaultapi.Renewer) {

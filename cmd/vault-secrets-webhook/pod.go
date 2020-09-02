@@ -33,10 +33,12 @@ pid_file = "/tmp/pidfile"
 exit_after_auth = true
 
 auto_auth {
-	method "kubernetes" {
+	method "gcp" {
 		mount_path = "auth/%s"
 		config = {
 			role = "%s"
+			type = "iam"
+			service_account = "%s"
 		}
 	}
 
@@ -752,7 +754,7 @@ func getConfigMapForVaultAgent(pod *corev1.Pod, vaultConfig VaultConfig) *corev1
 			OwnerReferences: ownerReferences,
 		},
 		Data: map[string]string{
-			"config.hcl": fmt.Sprintf(vaultAgentConfig, vaultConfig.Path, vaultConfig.Role),
+			"config.hcl": fmt.Sprintf(vaultAgentConfig, vaultConfig.Path, vaultConfig.Role, vaultConfig.Email),
 		},
 	}
 }
