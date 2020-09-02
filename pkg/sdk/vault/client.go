@@ -31,10 +31,6 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const (
-	defaultServiceAccountFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-)
-
 // NewData is a helper function for Vault KV Version two secret data creation
 func NewData(cas int, data map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
@@ -291,11 +287,6 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 				return nil, err
 			}
 
-			serviceAccountFile := defaultServiceAccountFile
-			if file := os.Getenv("KUBERNETES_SERVICE_ACCOUNT_TOKEN"); file != "" {
-				serviceAccountFile = file
-			}
-
 			initialTokenArrived := make(chan string, 1)
 			initialTokenSent := false
 
@@ -308,15 +299,8 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 					}
 					client.mu.Unlock()
 
-					jwt, err := gceJwt()
-					fmt.Println(jwt)
-					if err != nil {
-						client.logger.Error("failed to read SA token", map[string]interface{}{
-							"serviceAccount": serviceAccountFile,
-							"err":            err,
-						})
-						continue
-					}
+					// Projected SA tokens do expire, so we need to move the reading logic into the loop
+					jwt, err := gceJwt(o.role)
 
 					data := map[string]interface{}{
 						"jwt":  string(jwt),
@@ -379,8 +363,24 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 	return client, nil
 }
 
-func gceJwt() (string, error) {
-	req, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email", nil)
+func (client *Client) runRenewChecker(tokenRenewer *vaultapi.Renewer) {
+	for {
+		select {
+		case err := <-tokenRenewer.DoneCh():
+			if err != nil {
+				client.logger.Error("error in Vault token renewal", map[string]interface{}{"err": err})
+			}
+			return
+		case o := <-tokenRenewer.RenewCh():
+			ttl, _ := o.Secret.TokenTTL()
+			client.logger.Info("renewed Vault token", map[string]interface{}{"ttl": ttl})
+		}
+	}
+}
+
+func gceJwt(role string) (string, error) {
+	url := fmt.Sprintf("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?format=full&audience=http%%3A%%2F%%2Fvault%%2F%s", role)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		// handle err
 	}
@@ -401,21 +401,6 @@ func gceJwt() (string, error) {
 		return jwt, nil
 	}
 	return "", nil
-}
-
-func runRenewChecker(tokenRenewer *vaultapi.Renewer) {
-	for {
-		select {
-		case err := <-tokenRenewer.DoneCh():
-			if err != nil {
-				client.logger.Error("error in Vault token renewal", map[string]interface{}{"err": err})
-			}
-			return
-		case o := <-tokenRenewer.RenewCh():
-			ttl, _ := o.Secret.TokenTTL()
-			client.logger.Info("renewed Vault token", map[string]interface{}{"ttl": ttl})
-		}
-	}
 }
 
 // Vault returns the underlying hashicorp Vault client.
