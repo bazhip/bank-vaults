@@ -302,6 +302,7 @@ func NewClientFromRawClient(rawClient *vaultapi.Client, opts ...ClientOption) (*
 					client.mu.Unlock()
 
 					jwt, err := gceJwt()
+					fmt.Println(jwt)
 					if err != nil {
 						logger.Errorf("failed to read SA token %s: %v", serviceAccountFile, err.Error())
 						continue

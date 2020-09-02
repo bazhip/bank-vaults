@@ -28,8 +28,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 
-	"github.com/bazhip/bank-vaults/internal/injector"
-	"github.com/bazhip/bank-vaults/pkg/sdk/vault"
+	"github.com/banzaicloud/bank-vaults/internal/injector"
+	"github.com/banzaicloud/bank-vaults/pkg/sdk/vault"
 )
 
 // The special value for VAULT_ENV which marks that the login token needs to be passed through to the application
