@@ -27,6 +27,7 @@ import (
 	vaultapi "github.com/hashicorp/vault/api"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+	logrusadapter "logur.dev/adapter/logrus"
 
 	"github.com/banzaicloud/bank-vaults/internal/injector"
 	"github.com/banzaicloud/bank-vaults/pkg/sdk/vault"
@@ -122,7 +123,7 @@ func main() {
 		lvl = logrus.InfoLevel
 	}
 
-	var logger logrus.FieldLogger
+	var logger *logrus.Entry
 	{
 		log := logrus.New()
 		log.SetLevel(lvl)
@@ -161,6 +162,7 @@ func main() {
 	client, err := vault.NewClientWithOptions(
 		vault.ClientRole(os.Getenv("VAULT_ROLE")),
 		vault.ClientAuthPath(os.Getenv("VAULT_PATH")),
+		vault.ClientLogger(logrusadapter.NewFromEntry(logger)),
 	)
 	if err != nil {
 		logger.Fatal("failed to create vault client", err.Error())

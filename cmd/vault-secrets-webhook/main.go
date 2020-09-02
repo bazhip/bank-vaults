@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes"
+	logrusadapter "logur.dev/adapter/logrus"
 	kubernetesConfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/banzaicloud/bank-vaults/cmd/vault-secrets-webhook/registry"
@@ -328,7 +329,7 @@ func parseVaultConfig(obj metav1.Object) VaultConfig {
 type mutatingWebhook struct {
 	k8sClient kubernetes.Interface
 	registry  registry.ImageRegistry
-	logger    logrus.FieldLogger
+	logger    *logrus.Entry
 }
 
 func (mw *mutatingWebhook) vaultSecretsMutator(ctx context.Context, obj metav1.Object) (bool, error) {
@@ -357,7 +358,7 @@ func (mw *mutatingWebhook) vaultSecretsMutator(ctx context.Context, obj metav1.O
 }
 
 func (mw *mutatingWebhook) getDataFromConfigmap(cmName string, ns string) (map[string]string, error) {
-	configMap, err := mw.k8sClient.CoreV1().ConfigMaps(ns).Get(cmName, metav1.GetOptions{})
+	configMap, err := mw.k8sClient.CoreV1().ConfigMaps(ns).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +366,7 @@ func (mw *mutatingWebhook) getDataFromConfigmap(cmName string, ns string) (map[s
 }
 
 func (mw *mutatingWebhook) getDataFromSecret(secretName string, ns string) (map[string][]byte, error) {
-	secret, err := mw.k8sClient.CoreV1().Secrets(ns).Get(secretName, metav1.GetOptions{})
+	secret, err := mw.k8sClient.CoreV1().Secrets(ns).Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +455,7 @@ func (mw *mutatingWebhook) lookForValueFrom(env corev1.EnvVar, ns string) (*core
 	return nil, nil
 }
 
-func newVaultClient(vaultConfig VaultConfig) (*vault.Client, error) {
+func (mw *mutatingWebhook) newVaultClient(vaultConfig VaultConfig) (*vault.Client, error) {
 	clientConfig := vaultapi.DefaultConfig()
 	if clientConfig.Error != nil {
 		return nil, clientConfig.Error
@@ -473,6 +474,7 @@ func newVaultClient(vaultConfig VaultConfig) (*vault.Client, error) {
 		clientConfig,
 		vault.ClientRole(vaultConfig.Role),
 		vault.ClientAuthPath(vaultConfig.Path),
+		vault.ClientLogger(logrusadapter.NewFromEntry(mw.logger)),
 	)
 }
 
@@ -510,7 +512,7 @@ func (mw *mutatingWebhook) serveMetrics(addr string) {
 }
 
 func main() {
-	var logger logrus.FieldLogger
+	var logger *logrus.Entry
 	{
 		log := logrus.New()
 
