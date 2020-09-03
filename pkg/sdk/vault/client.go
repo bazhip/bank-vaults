@@ -382,13 +382,15 @@ func gceJwt(role string) (string, error) {
 	url := fmt.Sprintf("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?format=full&audience=http%%3A%%2F%%2Fvault%%2F%s", role)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		// handle err
+		log.Fatal(err)
+		return url, err
 	}
 	req.Header.Set("Metadata-Flavor", "Google")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		// handle err
+		log.Fatal(err)
+		return url, err
 	}
 	defer resp.Body.Close()
 
